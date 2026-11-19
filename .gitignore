@@ -1,0 +1,30 @@
+# Editors
+*~
+*.swp
+*.kdev4
+kdev4/
+*.txt.user*
+*.orig*
+*.autosave*
+.idea/
+.vscode/
+.cache/
+
+# Build outputs (plain CMake or colcon run from this folder)
+build/
+install/
+log/
+Testing/
+compile_commands.json
+
+# Compiled objects and libraries
+*.o
+*.so
+*.a
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Doxygen output
+doxygen/

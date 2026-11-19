@@ -1,0 +1,10 @@
+repositories:
+  cnr_class_loader:
+    type: git
+    url: https://github.com/JRL-CARI-CNR-UNIBS/cnr_class_loader.git
+    version: modern_cmake
+  graph_core:
+    type: git
+    url: https://github.com/JRL-CARI-CNR-UNIBS/graph_core.git
+    # ParamMap and the abstract logger (graph::core::LoggerPtr) are on this branch
+    version: removing_cnr_logger_and_params

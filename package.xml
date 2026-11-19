@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>bit_star</name>
+  <version>0.1.0</version>
+  <description>Batch Informed Trees (BIT*) path planner for graph_core, loadable as a cnr_class_loader plugin. Developed by CARI-JRL.</description>
+  <maintainer email="manuel.beschi@unibs.it">Manuel Beschi (CARI-JRL)</maintainer>
+  <license>BSD-3-Clause</license>
+  <url type="repository">https://github.com/JRL-CARI-CNR-UNIBS/bit_star</url>
+  <author email="manuel.beschi@unibs.it">Manuel Beschi</author>
+
+  <buildtool_depend>cmake</buildtool_depend>
+
+  <depend>eigen</depend>
+  <depend>cnr_class_loader</depend>
+  <depend>graph_core</depend>
+
+  <test_depend>gtest</test_depend>
+
+  <export>
+    <build_type>cmake</build_type>
+  </export>
+</package>
