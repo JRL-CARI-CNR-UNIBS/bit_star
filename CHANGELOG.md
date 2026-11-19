@@ -9,6 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Options of the OMPL implementation not available yet: delay the rewiring until the first solution, just-in-time
   sampling, drop the unconnected samples at each pruning, stop at each solution improvement, approximate
   solutions.
+- Cheaper batches in high dimension (12D and more): the r-disc radius makes the graph almost complete, and BIT\*
+  runs only 1–2k iterations in 50 s (see the comparison in the README).
 - Shared base for the planners derived from BIT\* (ABIT\*, AIT\*, EIT\*): batches, RGG radius, per-vertex labels.
 
 ## [0.1.0] - 2026-11-19
@@ -29,4 +31,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `graph::bit_star::BITStarPlugin`, loadable with `cnr_class_loader` as a `graph::core::TreeSolverPlugin`.
 - Example `bit_star_wall_example` (wall with a slit in the plane), gtest suite, tutorial, API reference, CI.
 - Example `bit_star_compare_rrt_star` and test `BeatsRRTStarOnCubeObstacle`: anytime comparison with graph_core's
-  RRT\* on the same problems (results in the README).
+  RRT\* and, if mirrt_star is installed, with MI-RRT\*, on a wall with a slit (2D), a cube obstacle and two boxes
+  with a narrow passage, in any dimension (2D to 18D in the README);
+  results in the README.

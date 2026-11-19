@@ -181,7 +181,8 @@ cnr_class_loader fix on branch `fix/library-path-lookup`; before it, only names 
 while you use the solver, and release the solver before the loader.
 
 To compare BIT\* with RRT\* on your machine, run
-`~/ros2_ws/install/bit_star/lib/bit_star/bit_star_compare_rrt_star 7` (see the README for the results).
+`~/ros2_ws/install/bit_star/lib/bit_star/bit_star_compare_rrt_star --runs 3 twocubes3d` (50 s per run and solver;
+`cube<n>d` and `twocubes<n>d` accept any dimension; see the README for the problems and the results).
 
 ---
 

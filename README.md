@@ -112,25 +112,103 @@ plugin->init(params, metrics, checker, sampler, goal_cost_fcn, logger);
 graph::core::TreeSolverPtr solver = plugin->getSolver();
 ```
 
-## Comparison with RRT\*
+## Comparison with RRT\* and MI-RRT\*
 
-`bit_star_compare_rrt_star [runs] [max_distance]` runs BIT\* and graph_core's `RRTStar` on the same problems,
-with the same `InformedSampler`, Euclidean metrics, collision checker and parameters (`max_distance` 1.0,
-`rewire_factor` 1.1, `samples_per_batch` 100). Median cost over 7 runs (worst run in brackets), Release build,
-desktop CPU:
+`bit_star_compare_rrt_star [--runs N] [--max-distance D] [--solver bit,rrt,mirrt] [problem ...]` runs BIT\*, graph_core's `RRTStar` and, if the
+package [mirrt_star](https://github.com/JRL-CARI-CNR-UNIBS/mirrt_star) is found at build time (optional),
+`graph::mirrt_star::MultigoalSolver` (MI-RRT\*, here with a single goal and its defaults: bidirectional, mixed
+strategy with a tube around the solution, `rewire_radius` = 2·`max_distance`) on the same problems, with the same `InformedSampler`, Euclidean metrics, collision checker (axis-aligned boxes, edges checked
+every 0.005) and parameters (`max_distance` 1.0, `rewire_factor` 1.1, `samples_per_batch` 100, r-disc RGG).
+The problems (`<n>` is any dimension ≥ 2):
 
-| Problem (optimum) | Solver | 0.05 s | 0.1 s | 0.25 s | 0.5 s | 1 s |
-|---|---|---|---|---|---|---|
-| wall with slit, 2D (2.4601) | BIT\* | 2.4775 [2.4825] | 2.4757 [2.4811] | 2.4718 [2.4766] | 2.4676 [2.4749] | 2.4656 [2.4745] |
-| | RRT\* | 2.4837 [2.4931] | 2.4782 [2.4894] | 2.4750 [2.4804] | 2.4702 [2.4767] | 2.4690 [2.4749] |
-| cube obstacle, 3D (5.9161) | BIT\* | 6.0129 [6.0230] | 6.0045 [6.0201] | 5.9831 [5.9976] | 5.9800 [5.9976] | 5.9746 [5.9855] |
-| | RRT\* | 6.1704 [6.1795] | 6.0968 [6.1705] | 6.0789 [6.1161] | 6.0658 [6.1095] | 6.0615 [6.0827] |
+- `wall2d`: wall |x| ≤ 0.05 with a slit |y| < 0.1, from (-1, 0.8) to (1, 0.8) in [-1.5, 1.5]²;
+- `cube<n>d`: obstacle [-1, 1]ⁿ, from (-1.5, …) to (1.5, …) in [-2.5, 2.5]ⁿ; the optimum bends once on an
+  (n-2)-face of the cube, 2·√(0.5² + 2.5² + (n-2)·1.5²);
+- `twocubes<n>d`: two boxes x₁ ∈ [0.05, 2.05] and x₁ ∈ [-2.05, -0.05] (the other coordinates in [-1, 1]) with a
+  narrow passage |x₁| < 0.05 between them, from (-1.5, 0.6, 0, …) to (1.5, 0.6, 0, …) in [-2.5, 2.5]ⁿ; the
+  optimum goes through the passage, 2·hypot(0.5, 0.55) + 2 ≈ 3.4866 in any dimension (around the boxes: 4.236).
 
-Both find the first solution in less than 1 ms. In 3D BIT\* is better at every instant: after 0.1 s it is below
-the cost RRT\* reaches in 1 s (+1.0 % from the optimum against +2.5 %). In 2D the advantage is smaller and
-shrinks with time (at 1 s the worst runs are equal). The optimum of the cube problem is the shortest path bending
-once on an edge of the cube (√35). The test `BeatsRRTStarOnCubeObstacle` checks the 3D result (median of 5 runs
-at 0.25 s). The samplers are not seeded, so the numbers change slightly at every run.
+The optima were also checked numerically (shortest path with free waypoints, up to 18D).
+
+Results over 50 s. Each cell is the median cost over 7 runs, with the worst run in brackets (`inf` = no solution
+yet). Below it are the median number of iterations (calls to `update()`) and, for BIT\*, of batches. An iteration
+is not the same unit for all solvers: for BIT\* it is one edge (or one vertex expansion, or the drawing of a
+batch), for RRT\* and MI-RRT\* one sample. The rows "md 10" use `max_distance` 10 (5 runs): with 1.0, RRT\*
+finds no solution in 12D and 18D, and MI-RRT\* improves little. Release build, desktop CPU, 11 runs in parallel
+(one per core). All solvers are informed: after the first solution they sample in the informed ellipsoid.
+
+| Problem (optimum) | Solver | first sol. | 0.1 s | 1 s | 5 s | 10 s | 20 s | 50 s |
+|---|---|---|---|---|---|---|---|---|
+| wall2d (2.4601) | BIT\* | 0.30 ms | 2.477 [2.490]<br>39k it, 34 b | 2.467 [2.469]<br>145k it, 102 b | 2.466 [2.468]<br>360k it, 222 b | 2.464 [2.466]<br>563k it, 327 b | 2.463 [2.465]<br>835k it, 462 b | 2.463 [2.464]<br>1.4M it, 714 b |
+|  | RRT\* | 0.28 ms | 2.482 [2.515]<br>4k it | 2.472 [2.482]<br>18k it | 2.469 [2.470]<br>56k it | 2.467 [2.469]<br>93k it | 2.464 [2.466]<br>152k it | 2.463 [2.464]<br>293k it |
+|  | MI-RRT\* | 0.06 ms | 2.468 [2.475]<br>735 it | 2.465 [2.466]<br>2k it | 2.462 [2.463]<br>4k it | 2.461 [2.462]<br>5k it | 2.461 [2.462]<br>6k it | 2.460 [2.461]<br>9k it |
+| cube3d (5.9161) | BIT\* | 0.35 ms | 6.015 [6.050]<br>18k it, 27 b | 6.002 [6.014]<br>77k it, 72 b | 5.969 [5.979]<br>237k it, 156 b | 5.965 [5.976]<br>383k it, 219 b | 5.961 [5.968]<br>619k it, 307 b | 5.960 [5.965]<br>1.1M it, 472 b |
+|  | RRT\* | 0.45 ms | 6.167 [6.262]<br>4k it | 6.096 [6.148]<br>18k it | 6.047 [6.089]<br>53k it | 6.041 [6.065]<br>88k it | 6.031 [6.052]<br>150k it | 6.021 [6.029]<br>297k it |
+|  | MI-RRT\* | 0.04 ms | 5.948 [5.969]<br>2k it | 5.936 [5.968]<br>6k it | 5.934 [5.946]<br>10k it | 5.928 [5.946]<br>14k it | 5.927 [5.935]<br>17k it | 5.925 [5.935]<br>24k it |
+| cube6d (7.8740) | BIT\* | 0.24 ms | 8.360 [8.442]<br>965 it, 14 b | 8.302 [8.442]<br>3k it, 32 b | 8.294 [8.387]<br>5k it, 55 b | 8.289 [8.387]<br>7k it, 71 b | 8.283 [8.387]<br>9k it, 91 b | 8.283 [8.387]<br>14k it, 122 b |
+|  | RRT\* | 51.4 ms | 9.632 [inf]<br>2k it | 9.370 [9.697]<br>9k it | 9.368 [9.396]<br>19k it | 9.358 [9.370]<br>28k it | 9.252 [9.370]<br>42k it | 9.155 [9.370]<br>78k it |
+|  | MI-RRT\* | 0.04 ms | 8.499 [9.290]<br>1k it | 8.167 [8.272]<br>4k it | 8.075 [8.150]<br>8k it | 8.074 [8.108]<br>10k it | 8.064 [8.095]<br>13k it | 8.058 [8.077]<br>20k it |
+| cube12d (10.7703) | BIT\* | 0.21 ms | 11.941 [12.268]<br>314 it, 11 b | 11.856 [11.941]<br>667 it, 26 b | 11.763 [11.898]<br>1k it, 46 b | 11.740 [11.898]<br>1k it, 55 b | 11.740 [11.898]<br>1k it, 66 b | 11.740 [11.898]<br>2k it, 84 b |
+|  | RRT\* | – | inf [inf]<br>1k it | inf [inf]<br>4k it | inf [inf]<br>8k it | inf [inf]<br>10k it | inf [inf]<br>13k it | inf [inf]<br>18k it |
+|  | RRT\* md 10 | 0.42 ms | 13.989 [14.714]<br>1k it | 13.989 [14.714]<br>5k it | 13.989 [14.714]<br>10k it | 13.989 [14.714]<br>12k it | 13.989 [14.714]<br>15k it | 13.989 [14.714]<br>20k it |
+|  | MI-RRT\* | 0.07 ms | 14.253 [15.345]<br>1k it | 14.253 [15.345]<br>5k it | 14.100 [15.345]<br>9k it | 14.100 [15.345]<br>12k it | 14.100 [15.345]<br>16k it | 14.100 [15.345]<br>25k it |
+|  | MI-RRT\* md 10 | 0.04 ms | 11.053 [11.101]<br>824 it | 11.008 [11.086]<br>3k it | 11.008 [11.026]<br>6k it | 10.984 [11.011]<br>7k it | 10.971 [10.984]<br>10k it | 10.958 [10.984]<br>14k it |
+| cube18d (13.0384) | BIT\* | 0.24 ms | 14.371 [14.667]<br>246 it, 10 b | 14.371 [14.667]<br>514 it, 19 b | 14.371 [14.667]<br>803 it, 33 b | 14.371 [14.667]<br>939 it, 40 b | 14.371 [14.667]<br>1k it, 49 b | 14.371 [14.667]<br>1k it, 62 b |
+|  | RRT\* | – | inf [inf]<br>663 it | inf [inf]<br>3k it | inf [inf]<br>6k it | inf [inf]<br>8k it | inf [inf]<br>10k it | inf [inf]<br>15k it |
+|  | RRT\* md 10 | 0.86 ms | 17.867 [18.896]<br>1k it | 17.867 [18.443]<br>4k it | 17.867 [18.443]<br>9k it | 17.867 [18.443]<br>10k it | 17.867 [18.443]<br>12k it | 17.867 [18.443]<br>16k it |
+|  | MI-RRT\* | 0.09 ms | 17.426 [20.002]<br>860 it | 17.338 [20.002]<br>4k it | 17.338 [20.002]<br>8k it | 17.338 [20.002]<br>11k it | 17.338 [20.002]<br>13k it | 17.338 [20.002]<br>18k it |
+|  | MI-RRT\* md 10 | 0.05 ms | 13.512 [13.551]<br>875 it | 13.416 [13.500]<br>4k it | 13.388 [13.468]<br>9k it | 13.388 [13.468]<br>12k it | 13.388 [13.430]<br>17k it | 13.352 [13.371]<br>23k it |
+| twocubes2d (3.4866) | BIT\* | 0.51 ms | 3.503 [3.506]<br>48k it, 28 b | 3.495 [3.498]<br>224k it, 84 b | 3.489 [3.493]<br>633k it, 182 b | 3.489 [3.492]<br>984k it, 256 b | 3.489 [3.492]<br>1.5M it, 365 b | 3.487 [3.489]<br>2.7M it, 577 b |
+|  | RRT\* | 0.50 ms | 3.509 [5.173]<br>7k it | 3.494 [3.499]<br>28k it | 3.490 [3.492]<br>75k it | 3.489 [3.490]<br>120k it | 3.488 [3.490]<br>191k it | 3.486 [3.488]<br>360k it |
+|  | MI-RRT\* | 0.08 ms | 5.122 [7.462]<br>2k it | 5.089 [7.415]<br>5k it | 5.077 [7.415]<br>10k it | 5.077 [7.415]<br>12k it | 5.076 [7.404]<br>17k it | 5.076 [7.402]<br>26k it |
+| twocubes3d (3.4866) | BIT\* | 0.44 ms | 3.557 [3.574]<br>22k it, 27 b | 3.533 [3.544]<br>103k it, 71 b | 3.521 [3.530]<br>320k it, 138 b | 3.517 [3.525]<br>529k it, 192 b | 3.513 [3.522]<br>898k it, 269 b | 3.510 [3.518]<br>1.7M it, 414 b |
+|  | RRT\* | 0.47 ms | 3.856 [4.581]<br>7k it | 3.601 [3.694]<br>34k it | 3.566 [3.603]<br>88k it | 3.546 [3.565]<br>136k it | 3.539 [3.555]<br>212k it | 3.531 [3.546]<br>387k it |
+|  | MI-RRT\* | 0.06 ms | 3.541 [4.315]<br>2k it | 3.506 [4.263]<br>8k it | 3.500 [3.519]<br>17k it | 3.500 [3.509]<br>22k it | 3.499 [3.504]<br>30k it | 3.497 [3.502]<br>44k it |
+| twocubes6d (3.4866) | BIT\* | 0.70 ms | 5.299 [5.492]<br>2k it, 17 b | 4.930 [5.014]<br>5k it, 41 b | 4.279 [4.767]<br>13k it, 91 b | 3.932 [4.681]<br>20k it, 128 b | 3.914 [4.092]<br>27k it, 167 b | 3.839 [3.935]<br>39k it, 236 b |
+|  | RRT\* | 185.7 ms | inf [inf]<br>3k it | 6.321 [inf]<br>12k it | 5.999 [6.603]<br>24k it | 5.999 [6.370]<br>33k it | 5.963 [6.250]<br>49k it | 5.933 [6.091]<br>84k it |
+|  | MI-RRT\* | 0.08 ms | 4.587 [4.835]<br>3k it | 3.651 [3.760]<br>11k it | 3.608 [3.649]<br>24k it | 3.604 [3.648]<br>35k it | 3.581 [3.638]<br>49k it | 3.581 [3.638]<br>73k it |
+| twocubes12d (3.4866) | BIT\* | 1.4 ms | 9.434 [10.289]<br>1k it, 11 b | 8.327 [8.474]<br>4k it, 29 b | 7.613 [8.187]<br>7k it, 55 b | 7.367 [7.529]<br>9k it, 69 b | 7.123 [7.373]<br>12k it, 89 b | 7.029 [7.327]<br>14k it, 111 b |
+|  | RRT\* | – | inf [inf]<br>1k it | inf [inf]<br>4k it | inf [inf]<br>8k it | inf [inf]<br>10k it | inf [inf]<br>12k it | inf [inf]<br>18k it |
+|  | RRT\* md 10 | 0.57 ms | 9.470 [9.557]<br>1k it | 8.329 [8.591]<br>6k it | 8.189 [8.443]<br>15k it | 8.189 [8.443]<br>20k it | 8.189 [8.443]<br>25k it | 8.189 [8.443]<br>35k it |
+|  | MI-RRT\* | 0.19 ms | 9.929 [13.623]<br>986 it | 9.929 [13.623]<br>4k it | 9.929 [13.241]<br>9k it | 8.944 [13.241]<br>11k it | 8.944 [13.241]<br>15k it | 8.944 [13.241]<br>23k it |
+|  | MI-RRT\* md 10 | 0.12 ms | 5.014 [5.383]<br>3k it | 3.989 [5.014]<br>15k it | 3.832 [3.867]<br>48k it | 3.820 [3.864]<br>80k it | 3.776 [3.820]<br>127k it | 3.736 [3.807]<br>251k it |
+| twocubes18d (3.4866) | BIT\* | 2.2 ms | 14.475 [15.015]<br>1k it, 8 b | 14.008 [14.963]<br>2k it, 18 b | 13.629 [14.209]<br>4k it, 31 b | 13.372 [13.728]<br>6k it, 44 b | 12.288 [13.728]<br>8k it, 53 b | 12.288 [13.158]<br>12k it, 83 b |
+|  | RRT\* | – | inf [inf]<br>755 it | inf [inf]<br>3k it | inf [inf]<br>6k it | inf [inf]<br>8k it | inf [inf]<br>10k it | inf [inf]<br>15k it |
+|  | RRT\* md 10 | 1.1 ms | 14.060 [15.308]<br>1k it | 13.851 [14.500]<br>5k it | 12.821 [13.030]<br>13k it | 12.167 [13.030]<br>17k it | 12.028 [13.030]<br>21k it | 11.807 [12.325]<br>28k it |
+|  | MI-RRT\* | 0.33 ms | 15.081 [22.463]<br>721 it | 15.081 [22.463]<br>4k it | 13.411 [22.463]<br>8k it | 13.411 [22.463]<br>9k it | 13.411 [22.463]<br>13k it | 13.411 [22.463]<br>17k it |
+|  | MI-RRT\* md 10 | 0.16 ms | 6.009 [6.290]<br>2k it | 4.501 [5.463]<br>13k it | 4.371 [5.247]<br>42k it | 4.256 [5.210]<br>73k it | 4.184 [5.156]<br>117k it | 4.174 [5.156]<br>209k it |
+
+**MI-RRT\*** is the best of the three on almost every problem, from 2D to 18D:
+- it converges closest to the optimum: `wall2d` 2.460, `cube3d` 5.925, `cube6d` 8.058 at 50 s, against
+  BIT\* 2.463, 5.960, 8.283;
+- in 12D and 18D, with `max_distance` 10, it is the only one that goes through the passage (`twocubes12d`
+  3.74, `twocubes18d` 4.17) and that gets close to the optimum of the cubes (10.96 and 13.35, against 11.74 and
+  14.37 for BIT\*). It also runs 10–20 times more iterations than RRT\* md 10 (251k against 35k in
+  `twocubes12d`);
+- the exception is `twocubes2d`: the median run stays around the upper box (5.076, the best path in that
+  homotopy class is 5.068), while BIT\* and RRT\* reach 3.487. The sampling in the tube around the current
+  solution keeps it in the wrong homotopy class. In `twocubes3d` too the worst run is at 3.50, but the median
+  is right.
+- with `max_distance` 1.0 in 12D and 18D, MI-RRT\* finds a solution but improves it little (14.10, 17.34,
+  8.94, 13.41): the steering distance matters more for it than for BIT\*, which has no `max_distance`.
+
+**BIT\* against RRT\*:**
+- **2D:** BIT\* is ahead in the first seconds, then the two converge to the same cost.
+- **3D:** BIT\* is ahead at every instant: RRT\* needs 50 s to reach what BIT\* has at 1–5 s.
+- **6D:** RRT\* stays far from the optimum (`cube6d` 9.16, `twocubes6d` 5.93, around the boxes). BIT\* goes
+  through the passage of `twocubes6d` within 10 s (3.84 at 50 s).
+- **12D and 18D:** BIT\* is better than RRT\* md 10 on the cubes and on `twocubes12d`, worse on `twocubes18d`.
+- **Why BIT\* stalls in high dimension:** BIT\* makes very few iterations, about 14k in 50 s in 6D and 1–2k in
+  12D/18D, against 1–3M in 2D/3D. The r-disc radius grows with the dimension: 3.8 in 12D and 5.8–10.7 in 18D,
+  in a box of side 5. The graph is then almost complete, and each vertex expansion queues edges towards almost
+  all the states. On `cube18d` the cost does not change in 50 s (62 batches). Lowering the cost of a batch in
+  high dimension is the main open point (see `CHANGELOG.md`, Planned).
+
+The test `BeatsRRTStarOnCubeObstacle` checks the `cube3d` result (median of 5 runs at 0.25 s). The samplers are
+not seeded, so the numbers change slightly at every run. Reproduce one cell with e.g.
+`bit_star_compare_rrt_star --runs 7 --solver bit twocubes6d` (50 s per run; `--solver` takes a comma-separated
+list of `bit`, `rrt`, `mirrt`). With no problem names, all ten problems and all solvers run in sequence, about
+3 hours.
 
 ## Algorithm
 
@@ -268,7 +346,7 @@ bit_star/
 │   └── plugins/solvers/bit_star_plugin.cpp     plugin registration
 ├── examples/
 │   ├── wall_example.cpp                        wall with a slit in the plane
-│   └── compare_rrt_star.cpp                    anytime comparison with RRT*
+│   └── compare_rrt_star.cpp                    anytime comparison with RRT* and MI-RRT*
 ├── tests/
 │   ├── CMakeLists.txt                          gtest suite
 │   └── src/test_bit_star.cpp
